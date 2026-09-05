@@ -84,14 +84,27 @@ docker build -t helm-ai-mcp .
 
 The multi-stage build compiles the native Helm library for the image's own
 architecture (amd64 and arm64 both work), assembles the Python stack, and
-ships a slim non-root runtime. MCP client configuration:
+ships a slim non-root runtime. Supply-chain inputs are pinned: base images
+by manifest digest, and the helm-python-sdk clone is verified against the
+exact commit its version tag pointed to — a moved tag fails the build.
+Only helm-python-sdk is pinned; the helm-c-sdk version is read from
+helm-python-sdk's own `EXPECTED_HELM_C_VERSION` pin, so the native
+dependency stays owned by the package that declares it. (Once
+helm-python-sdk is on PyPI, the build reduces to installing it — the
+sdist vendors and compiles helm-c itself.)
+
+Run it with least privilege (no capabilities, no privilege escalation,
+read-only root filesystem, tmpfs scratch space):
 
 ```json
 {
   "mcpServers": {
     "helm": {
       "command": "docker",
-      "args": ["run", "-i", "--rm",
+      "args": ["run", "-i", "--rm", "--init",
+               "--read-only", "--cap-drop", "ALL",
+               "--security-opt", "no-new-privileges",
+               "--tmpfs", "/tmp", "--tmpfs", "/home/helm",
                "-v", "/home/you/.kube/config:/home/helm/.kube/config:ro",
                "helm-ai-mcp"]
     }
@@ -101,9 +114,11 @@ ships a slim non-root runtime. MCP client configuration:
 
 `docker-compose.yml` wraps the same image for `docker compose run --rm
 helm-mcp` (compose `run`, not `up`: stdio servers are launched by their
-client). Pass `-e HELM_AI_ALLOW_WRITES=1` / `-e
-HELM_AI_ALLOW_DESTRUCTIVE=1` only when you mean it, and prefer mounting a
-kubeconfig whose RBAC matches the tier you enabled.
+client) with the same hardening baked in (`cap_drop: [ALL]`,
+`no-new-privileges`, `read_only`, tmpfs mounts, `pids_limit`). Pass
+`-e HELM_AI_ALLOW_WRITES=1` / `-e HELM_AI_ALLOW_DESTRUCTIVE=1` only when
+you mean it, and prefer mounting a kubeconfig whose RBAC matches the tier
+you enabled.
 
 ## The agent
 

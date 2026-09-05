@@ -38,6 +38,18 @@ helm (Go SDK) → helm-c-sdk (C ABI) → helm-python-sdk (ctypes) → helm-pytho
       (`apps_html.py`); agent live narration + `--verbose` native logs
 - [x] Docker: multi-stage Dockerfile (arch-native build of libhelm_c,
       non-root slim runtime) + compose wrapper for `docker compose run`
+- [x] Docker security pass: digest-pinned bases, commit-verified clone,
+      helm-c version derived from helm-python-sdk's own pin, venv
+      installers stripped + msgpack floor, system pip/ensurepip removed
+      from runtime, least-privilege runtime (cap_drop ALL,
+      no-new-privileges, read_only, tmpfs, pids_limit, init) verified
+      working. Trivy HIGH/CRITICAL: Python 0; remaining 54 are Debian
+      base packages with no fix shipped (perl-base, util-linux, ncurses,
+      sqlite, systemd libs) — exploitability mitigated by the runtime
+      posture; revisit with a distroless/chiselled base later
+- [ ] Post-PyPI: replace the Dockerfile clone chain with
+      `HELM_PYTHON_BUILD=1 pip install helm-python-sdk==<ver>` (sdist
+      vendors helm-c); add a trivy scan gate to CI when CI lands
 - [ ] Publish to PyPI (after helm-python-sdk lands on PyPI — the
       dependency must be resolvable first)
 - [ ] CI: lint + mypy + pytest matrix, same posture as helm-python-sdk
