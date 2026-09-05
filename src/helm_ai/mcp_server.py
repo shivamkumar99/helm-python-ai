@@ -21,6 +21,8 @@ so the environment is the only authorization channel here.
 
 from __future__ import annotations
 
+import functools
+import inspect
 import json
 import logging
 import sys
@@ -29,7 +31,9 @@ from typing import Any
 
 try:
     from mcp.server.apps import Apps
+    from mcp.server.context import CallNext, HandlerResult, ServerRequestContext
     from mcp.server.mcpserver import Context, MCPServer
+    from mcp.server.mcpserver.exceptions import ToolError
 except ImportError as exc:  # pragma: no cover - import guard
     raise ImportError(
         "the MCP server needs the 'mcp' package (2.x): "
@@ -38,14 +42,77 @@ except ImportError as exc:  # pragma: no cover - import guard
 
 import helm_python as helm
 
-from . import feedback, tools
+from . import audit, feedback, telemetry, tools
 from .apps_html import RELEASES_APP_HTML, RELEASES_APP_URI
+from .safety import SafetyError
+
+#: Failures whose message is meant for the caller: they surface verbatim
+#: as tool errors instead of the SDK's generic "Error executing tool".
+_ANTICIPATED = (helm.HelmError, SafetyError, ValueError)
+
+
+def _tool_errors(fn: Any) -> Any:
+    if inspect.iscoroutinefunction(fn):
+
+        @functools.wraps(fn)
+        async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
+            try:
+                return await fn(*args, **kwargs)
+            except _ANTICIPATED as exc:
+                raise ToolError(str(exc)) from exc
+
+        return async_wrapper
+
+    @functools.wraps(fn)
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
+        try:
+            return fn(*args, **kwargs)
+        except _ANTICIPATED as exc:
+            raise ToolError(str(exc)) from exc
+
+    return wrapper
 
 # Audit trail on stderr: MCP stdio framing owns stdout, stderr is ours.
 logging.basicConfig(stream=sys.stderr, level=logging.INFO,
                     format="%(asctime)s %(name)s %(levelname)s %(message)s")
 
 apps = Apps()
+
+
+class AuditMiddleware:
+    """Ties each tools/call request id to the audit trail and its outcome.
+
+    Runs inside the SDK's OpenTelemetry middleware, so the emitted event
+    carries the request's trace/span IDs; the per-tool detail (arguments,
+    duration) comes from the tool layer's own ``tool.call`` events.
+    """
+
+    async def __call__(
+        self, ctx: ServerRequestContext[Any, Any], call_next: CallNext
+    ) -> HandlerResult:
+        if ctx.method != "tools/call":
+            return await call_next(ctx)
+        tool = (ctx.params or {}).get("name")
+        try:
+            result = await call_next(ctx)
+        except Exception as exc:
+            audit.emit(
+                "mcp.request",
+                tool=tool,
+                request_id=str(ctx.request_id),
+                outcome=type(exc).__name__,
+            )
+            raise
+        is_error = bool(getattr(result, "is_error", False)) or (
+            isinstance(result, dict) and result.get("isError") is True
+        )
+        audit.emit(
+            "mcp.request",
+            tool=tool,
+            request_id=str(ctx.request_id),
+            outcome="tool_error" if is_error else "success",
+        )
+        return result
 
 
 def _dump(value: Any) -> str:
@@ -68,6 +135,7 @@ def _reporter(ctx: Context) -> Callable[[float, str], Awaitable[None]]:
     resource_uri=RELEASES_APP_URI,
     description="List Helm releases (all states). name_filter is a regex on names.",
 )
+@_tool_errors
 def helm_list_releases(
     namespace: str | None = None,
     all_namespaces: bool = False,
@@ -82,13 +150,14 @@ def helm_list_releases(
 
 apps.add_html_resource(RELEASES_APP_URI, RELEASES_APP_HTML, title="Helm releases")
 
-mcp = MCPServer("helm", extensions=[apps])
+mcp = MCPServer("helm", extensions=[apps], middleware=[AuditMiddleware()])
 
 
 # --- fast read tools (sync; they finish well under a heartbeat) -----------
 
 
 @mcp.tool()
+@_tool_errors
 def helm_release_status(
     name: str, namespace: str | None = None, revision: int | None = None
 ) -> str:
@@ -97,6 +166,7 @@ def helm_release_status(
 
 
 @mcp.tool()
+@_tool_errors
 def helm_release_manifest(
     name: str, namespace: str | None = None, revision: int | None = None
 ) -> str:
@@ -105,6 +175,7 @@ def helm_release_manifest(
 
 
 @mcp.tool()
+@_tool_errors
 def helm_release_history(
     name: str, namespace: str | None = None, max_revisions: int | None = None
 ) -> str:
@@ -113,6 +184,7 @@ def helm_release_history(
 
 
 @mcp.tool()
+@_tool_errors
 def helm_release_values(
     name: str,
     namespace: str | None = None,
@@ -126,6 +198,7 @@ def helm_release_values(
 
 
 @mcp.tool()
+@_tool_errors
 def helm_template_chart(
     chart_path: str,
     values_json: str | None = None,
@@ -138,12 +211,14 @@ def helm_template_chart(
 
 
 @mcp.tool()
+@_tool_errors
 def helm_lint_chart(chart_path: str, strict: bool = False, kube_version: str | None = None) -> str:
     """Lint a local chart; returns findings (severity 1=info 2=warn 3=error)."""
     return _dump(tools.lint_chart(chart_path, strict=strict or None, kube_version=kube_version))
 
 
 @mcp.tool()
+@_tool_errors
 def helm_versions() -> str:
     """Versions of the Helm SDK stack this server is running on."""
     return _dump(
@@ -159,6 +234,7 @@ def helm_versions() -> str:
 
 
 @mcp.tool()
+@_tool_errors
 async def helm_show_chart(
     chart_ref: str,
     ctx: Context,
@@ -178,6 +254,7 @@ async def helm_show_chart(
 
 
 @mcp.tool()
+@_tool_errors
 async def helm_search_repository(
     repo_url: str, ctx: Context, name_filter: str | None = None
 ) -> str:
@@ -193,6 +270,7 @@ async def helm_search_repository(
 
 
 @mcp.tool()
+@_tool_errors
 async def helm_chart_tags(oci_ref: str, ctx: Context) -> str:
     """Available tags of an oci://host/path/chart reference, newest first."""
     result = await feedback.run_blocking(
@@ -202,6 +280,7 @@ async def helm_chart_tags(oci_ref: str, ctx: Context) -> str:
 
 
 @mcp.tool()
+@_tool_errors
 async def helm_install_release(
     chart_ref: str,
     name: str,
@@ -235,6 +314,7 @@ async def helm_install_release(
 
 
 @mcp.tool()
+@_tool_errors
 async def helm_upgrade_release(
     chart_ref: str,
     name: str,
@@ -268,6 +348,7 @@ async def helm_upgrade_release(
 
 
 @mcp.tool()
+@_tool_errors
 async def helm_uninstall_release(
     name: str,
     confirm: str,
@@ -288,6 +369,7 @@ async def helm_uninstall_release(
 
 
 @mcp.tool()
+@_tool_errors
 async def helm_rollback_release(
     name: str,
     confirm: str,
@@ -307,6 +389,7 @@ async def helm_rollback_release(
 
 def main() -> None:
     """Entry point for ``helm-ai-mcp``: serve over stdio."""
+    telemetry.configure_telemetry("helm-ai-mcp")
     feedback.capture_native_logs()
     mcp.run(transport="stdio")
 

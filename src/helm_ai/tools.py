@@ -13,14 +13,13 @@ the release storage driver (used by the offline test suite).
 from __future__ import annotations
 
 import json
-import logging
 import os
 from contextlib import closing
 from typing import Any
 
 import helm_python as helm
 
-from . import safety
+from . import audit, safety
 
 __all__ = [
     "DEFAULT_TIMEOUT",
@@ -56,11 +55,6 @@ MAX_VALUES_BYTES = 1_000_000
 #: Ceiling on tool output returned to the model; oversized results are
 #: truncated with a marker rather than flooding the caller's context.
 MAX_OUTPUT_CHARS = 200_000
-
-#: Audit trail for mutating operations and safety decisions; handlers go to
-#: stderr so MCP stdio framing on stdout is never disturbed.
-audit = logging.getLogger("helm_ai.audit")
-
 
 def parse_values_json(values_json: str | None) -> Json | None:
     """Parse a model-supplied values document, strictly.
@@ -99,6 +93,7 @@ def _config(namespace: str | None = None) -> helm.Config:
 # --- read tier ------------------------------------------------------------
 
 
+@audit.observed
 def list_releases(
     namespace: str | None = None,
     *,
@@ -115,6 +110,7 @@ def list_releases(
         )
 
 
+@audit.observed
 def release_status(name: str, namespace: str | None = None, revision: int | None = None) -> Json:
     """Full release summary, without the (often huge) manifest body."""
     with closing(_config(namespace)) as cfg:
@@ -124,6 +120,7 @@ def release_status(name: str, namespace: str | None = None, revision: int | None
     return status
 
 
+@audit.observed
 def release_manifest(name: str, namespace: str | None = None, revision: int | None = None) -> str:
     """The rendered manifest stored for a release revision."""
     with closing(_config(namespace)) as cfg:
@@ -131,6 +128,7 @@ def release_manifest(name: str, namespace: str | None = None, revision: int | No
     return str(manifest)
 
 
+@audit.observed
 def release_history(
     name: str, namespace: str | None = None, max_revisions: int | None = None
 ) -> list[Json]:
@@ -139,6 +137,7 @@ def release_history(
         return cfg.history(name, max_revisions=max_revisions)
 
 
+@audit.observed
 def release_values(
     name: str,
     namespace: str | None = None,
@@ -151,6 +150,7 @@ def release_values(
         return cfg.get_values(name, all_values=all_values, revision=revision)
 
 
+@audit.observed
 def show_chart(
     chart_ref: str,
     *,
@@ -167,6 +167,7 @@ def show_chart(
     )
 
 
+@audit.observed
 def template_chart(
     chart_path: str,
     values: Json | None = None,
@@ -179,6 +180,7 @@ def template_chart(
         return chart.render(values, name=name, namespace=namespace)
 
 
+@audit.observed
 def lint_chart(
     chart_path: str,
     values: Json | None = None,
@@ -190,6 +192,7 @@ def lint_chart(
     return helm.lint(chart_path, values, strict=strict, kube_version=kube_version)
 
 
+@audit.observed
 def search_repository(repo_url: str, name_filter: str | None = None) -> Json:
     """Chart names and their most recent versions from a repository index."""
     index = helm.repo_index(repo_url)
@@ -202,6 +205,7 @@ def search_repository(repo_url: str, name_filter: str | None = None) -> Json:
     return {"repository": repo_url, "charts": summary}
 
 
+@audit.observed
 def chart_tags(oci_ref: str) -> list[str]:
     """Semver tags of an ``oci://host/path/chart`` reference, newest first."""
     with closing(helm.RegistryClient()) as client:
@@ -211,6 +215,7 @@ def chart_tags(oci_ref: str) -> list[str]:
 # --- write tier (dry-run by default) --------------------------------------
 
 
+@audit.observed
 def install_release(
     chart_ref: str,
     name: str,
@@ -230,7 +235,6 @@ def install_release(
         safety.ensure_writes_allowed(
             f"helm install {name} {chart_ref} (namespace={namespace or 'default'})"
         )
-        audit.info("install apply name=%s chart=%s namespace=%s", name, chart_ref, namespace)
     with closing(_config(namespace)) as cfg:
         return cfg.install(
             chart_ref,
@@ -244,6 +248,7 @@ def install_release(
         )
 
 
+@audit.observed
 def upgrade_release(
     chart_ref: str,
     name: str,
@@ -263,7 +268,6 @@ def upgrade_release(
         safety.ensure_writes_allowed(
             f"helm upgrade {name} {chart_ref} (namespace={namespace or 'default'})"
         )
-        audit.info("upgrade apply name=%s chart=%s namespace=%s", name, chart_ref, namespace)
     with closing(_config(namespace)) as cfg:
         return cfg.upgrade(
             chart_ref,
@@ -280,6 +284,7 @@ def upgrade_release(
 # --- destructive tier ------------------------------------------------------
 
 
+@audit.observed
 def uninstall_release(
     name: str,
     namespace: str | None = None,
@@ -291,11 +296,11 @@ def uninstall_release(
     safety.ensure_destructive_allowed(
         f"helm uninstall {name} (namespace={namespace or 'default'})", name, confirm
     )
-    audit.info("uninstall name=%s namespace=%s keep_history=%s", name, namespace, keep_history)
     with closing(_config(namespace)) as cfg:
         return cfg.uninstall(name, keep_history=keep_history)
 
 
+@audit.observed
 def rollback_release(
     name: str,
     namespace: str | None = None,
@@ -310,7 +315,6 @@ def rollback_release(
         name,
         confirm,
     )
-    audit.info("rollback name=%s namespace=%s revision=%s", name, namespace, revision)
     with closing(_config(namespace)) as cfg:
         cfg.rollback(name, version=revision)
         return cfg.status(name)

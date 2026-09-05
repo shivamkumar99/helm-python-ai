@@ -185,6 +185,30 @@ and the OWASP GenAI *Practical Guide for Secure MCP Server Development*
   operation (with parameters) is logged to stderr, where the MCP host
   captures it — stdout stays reserved for protocol framing.
 
+## Observability & audit
+
+Instrumentation is vendor-neutral OpenTelemetry; no backend is bundled.
+
+* **Tracing** — the MCP SDK emits a span per inbound message
+  (`tools/call helm_install_release`, GenAI `execute_tool` attributes,
+  W3C trace-context propagation from the caller), and the tool layer adds
+  a nested span per operation. The agent wraps each mission in an
+  `invoke_agent` span carrying `gen_ai.usage.input_tokens`/
+  `output_tokens` and turn count. Export activates only when the standard
+  `OTEL_EXPORTER_OTLP_ENDPOINT` is set and the `observability` extra is
+  installed (`pip install helm-python-ai[observability]`); point it at
+  any OTLP backend (Grafana/Tempo, Jaeger, Langfuse, Datadog, ...).
+* **Audit trail** — every tool invocation (with an allowlisted argument
+  snapshot; values payloads are recorded as sizes only, never content),
+  every safety allow/refuse decision, every MCP request outcome, and each
+  agent mission produce structured JSON events on the `helm_ai.audit`
+  logger (stderr) and, when `HELM_AI_AUDIT_LOG=/path/file.jsonl` is set,
+  an append-only JSONL file. Events carry the active trace/span IDs, so
+  audit records and traces cross-reference.
+* **Metrics** — `helm_ai.tool.calls` (by tool and outcome) and a
+  `helm_ai.tool.duration` histogram flow through the same OTLP pipeline;
+  refusal spikes and error rates are the signals worth alerting on.
+
 ## Development
 
 ```bash

@@ -10,6 +10,7 @@ credential (``ANTHROPIC_API_KEY`` or an active ``ant auth`` profile).
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import logging
 import sys
@@ -26,7 +27,12 @@ except ImportError as exc:  # pragma: no cover - import guard
 
 import helm_python as helm
 
-from . import feedback, safety, tools
+from . import audit, feedback, safety, telemetry, tools
+
+try:
+    from opentelemetry import trace as _otel_trace
+except ImportError:  # pragma: no cover - otel not installed
+    _otel_trace = None  # type: ignore[assignment]
 
 DEFAULT_MODEL = "claude-opus-5"
 
@@ -439,21 +445,57 @@ def run_mission(
 ) -> str:
     """Run one agent mission to completion and return the final answer text."""
     client = client or anthropic.Anthropic()
-    runner = client.beta.messages.tool_runner(
-        model=model,
-        max_tokens=16000,
-        thinking={"type": "adaptive"},
-        system=SYSTEM_PROMPT,
-        tools=TOOLS,
-        messages=[{"role": "user", "content": prompt}],
+    span_cm = (
+        _otel_trace.get_tracer("helm_ai").start_as_current_span(
+            "invoke_agent helm-ai-agent",
+            attributes={
+                "gen_ai.operation.name": "invoke_agent",
+                "gen_ai.agent.name": "helm-ai-agent",
+                "gen_ai.request.model": model,
+            },
+        )
+        if _otel_trace is not None
+        else contextlib.nullcontext(None)
     )
-    final_text: list[str] = []
-    for message in runner:
-        if on_message is not None:
-            on_message(message)
-        final_text = [
-            block.text for block in message.content if block.type == "text" and block.text
-        ]
+    with span_cm as span:
+        runner = client.beta.messages.tool_runner(
+            model=model,
+            max_tokens=16000,
+            thinking={"type": "adaptive"},
+            system=SYSTEM_PROMPT,
+            tools=TOOLS,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        final_text: list[str] = []
+        turns = 0
+        input_tokens = 0
+        output_tokens = 0
+        for message in runner:
+            turns += 1
+            usage = getattr(message, "usage", None)
+            if usage is not None:
+                input_tokens += usage.input_tokens or 0
+                output_tokens += usage.output_tokens or 0
+            if on_message is not None:
+                on_message(message)
+            final_text = [
+                block.text for block in message.content if block.type == "text" and block.text
+            ]
+        if span is not None:
+            span.set_attributes(
+                {
+                    "gen_ai.usage.input_tokens": input_tokens,
+                    "gen_ai.usage.output_tokens": output_tokens,
+                    "helm_ai.agent.turns": turns,
+                }
+            )
+    audit.emit(
+        "agent.mission",
+        model=model,
+        turns=turns,
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+    )
     return "\n".join(final_text)
 
 
@@ -485,6 +527,7 @@ def main() -> int:
     )
     if args.verbose:
         feedback.capture_native_logs(logging.DEBUG)
+    telemetry.configure_telemetry("helm-ai-agent")
 
     if args.yes:
         safety.set_approval_hook(lambda _description: True)

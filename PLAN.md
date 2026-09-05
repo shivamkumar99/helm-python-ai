@@ -47,6 +47,13 @@ helm (Go SDK) → helm-c-sdk (C ABI) → helm-python-sdk (ctypes) → helm-pytho
       base packages with no fix shipped (perl-base, util-linux, ncurses,
       sqlite, systemd libs) — exploitability mitigated by the runtime
       posture; revisit with a distroless/chiselled base later
+- [x] Observability & audit: vendor-neutral OTLP wiring (`telemetry.py`,
+      env-gated, `observability` extra), structured JSONL audit trail
+      with trace correlation (`audit.py`: tool.call/safety.decision/
+      mcp.request/agent.mission events, allowlisted args), tool-layer
+      spans + metrics, agent `invoke_agent` span with token usage, MCP
+      AuditMiddleware, anticipated errors surfaced verbatim via ToolError.
+      Backend deliberately unbundled (OTEL_EXPORTER_OTLP_ENDPOINT).
 - [ ] Post-PyPI: replace the Dockerfile clone chain with
       `HELM_PYTHON_BUILD=1 pip install helm-python-sdk==<ver>` (sdist
       vendors helm-c); add a trivy scan gate to CI when CI lands
