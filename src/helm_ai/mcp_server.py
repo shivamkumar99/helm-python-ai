@@ -201,12 +201,12 @@ def helm_release_values(
 @_tool_errors
 def helm_template_chart(
     chart_path: str,
-    values_json: str | None = None,
+    values: dict[str, Any] | None = None,
     name: str = "release-name",
     namespace: str | None = None,
 ) -> str:
-    """Render a local chart offline. values_json is a JSON values document."""
-    values = tools.parse_values_json(values_json)
+    """Render a local chart offline. values is a JSON object of overrides."""
+    tools.ensure_values_size(values)
     return _dump(tools.template_chart(chart_path, values, name=name, namespace=namespace))
 
 
@@ -285,7 +285,7 @@ async def helm_install_release(
     chart_ref: str,
     name: str,
     ctx: Context,
-    values_json: str | None = None,
+    values: dict[str, Any] | None = None,
     namespace: str | None = None,
     apply: bool = False,
     create_namespace: bool = False,
@@ -294,7 +294,7 @@ async def helm_install_release(
 ) -> str:
     """Install a chart. Runs as a server-side dry run unless apply=true
     (real installs also need HELM_AI_ALLOW_WRITES=1 in the server env)."""
-    values = tools.parse_values_json(values_json)
+    tools.ensure_values_size(values)
     mode = "apply" if apply else "dry-run"
     result = await feedback.run_blocking(
         f"helm install {name} ({mode})",
@@ -319,7 +319,7 @@ async def helm_upgrade_release(
     chart_ref: str,
     name: str,
     ctx: Context,
-    values_json: str | None = None,
+    values: dict[str, Any] | None = None,
     namespace: str | None = None,
     apply: bool = False,
     reuse_values: bool = False,
@@ -328,7 +328,7 @@ async def helm_upgrade_release(
 ) -> str:
     """Upgrade a release. Runs as a server-side dry run unless apply=true
     (real upgrades also need HELM_AI_ALLOW_WRITES=1 in the server env)."""
-    values = tools.parse_values_json(values_json)
+    tools.ensure_values_size(values)
     mode = "apply" if apply else "dry-run"
     result = await feedback.run_blocking(
         f"helm upgrade {name} ({mode})",

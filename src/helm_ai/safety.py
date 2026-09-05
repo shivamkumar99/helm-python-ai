@@ -37,6 +37,10 @@ DESTRUCTIVE_ENV = "HELM_AI_ALLOW_DESTRUCTIVE"
 _approval_hook: Callable[[str], bool] | None = None
 
 
+def _record_decision(tier: str, decision: str, action: str, **extra: str) -> None:
+    audit.emit("safety.decision", tier=tier, decision=decision, action=action, **extra)
+
+
 class SafetyError(PermissionError):
     """A gated operation was attempted without the required authorization."""
 
@@ -62,9 +66,9 @@ def _env_enabled(name: str) -> bool:
 def ensure_writes_allowed(description: str) -> None:
     """Allow a cluster-mutating operation or raise :class:`SafetyError`."""
     if _env_enabled(WRITES_ENV) or _hook_approves(description):
-        audit.emit("safety.decision", tier="write", decision="allowed", action=description)
+        _record_decision("write", "allowed", description)
         return
-    audit.emit("safety.decision", tier="write", decision="refused", action=description)
+    _record_decision("write", "refused", description)
     raise SafetyError(
         f"refused: {description}. Cluster writes are disabled by default; "
         f"set {WRITES_ENV}=1 (or approve the prompt) to apply changes, or "
@@ -79,21 +83,15 @@ def ensure_destructive_allowed(description: str, name: str, confirm: str) -> Non
     gate (or the interactive hook) must also allow it.
     """
     if confirm != name:
-        audit.emit(
-            "safety.decision",
-            tier="destructive",
-            decision="refused",
-            reason="confirm mismatch",
-            action=description,
-        )
+        _record_decision("destructive", "refused", description, reason="confirm mismatch")
         raise SafetyError(
             f"refused: {description}. Destructive operations require the "
             f'exact release name echoed back: pass confirm="{name}".'
         )
     if _env_enabled(DESTRUCTIVE_ENV) or _hook_approves(description):
-        audit.emit("safety.decision", tier="destructive", decision="allowed", action=description)
+        _record_decision("destructive", "allowed", description)
         return
-    audit.emit("safety.decision", tier="destructive", decision="refused", action=description)
+    _record_decision("destructive", "refused", description)
     raise SafetyError(
         f"refused: {description}. Destructive operations are disabled by "
         f"default; set {DESTRUCTIVE_ENV}=1 (or approve the prompt) to allow "

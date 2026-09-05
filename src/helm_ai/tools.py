@@ -27,6 +27,7 @@ __all__ = [
     "MAX_VALUES_BYTES",
     "chart_tags",
     "clamp_output",
+    "ensure_values_size",
     "install_release",
     "lint_chart",
     "list_releases",
@@ -74,6 +75,13 @@ def parse_values_json(values_json: str | None) -> Json | None:
     if not isinstance(parsed, dict):
         raise ValueError("values_json must be a JSON object")
     return parsed
+
+
+def ensure_values_size(values: Json | None) -> Json | None:
+    """Enforce the values-size ceiling on an already-parsed document."""
+    if values is not None and len(json.dumps(values).encode()) > MAX_VALUES_BYTES:
+        raise ValueError(f"values document exceeds {MAX_VALUES_BYTES} bytes")
+    return values
 
 
 def clamp_output(text: str, limit: int = MAX_OUTPUT_CHARS) -> str:

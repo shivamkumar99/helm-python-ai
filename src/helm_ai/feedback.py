@@ -121,7 +121,9 @@ async def run_blocking(
     async def work() -> None:
         try:
             outcome.append(await anyio.to_thread.run_sync(call))
-        except BaseException as exc:
+        # Broad by design: cancellation and crashes alike are re-raised
+        # by the caller once the heartbeat has stopped.
+        except BaseException as exc:  # NOSONAR(S5754)
             failure.append(exc)
         finally:
             finished.set()

@@ -10,7 +10,7 @@ import pytest
 from helm_ai import audit, safety
 
 
-@pytest.fixture()
+@pytest.fixture
 def audit_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     path = tmp_path / "audit.jsonl"
     monkeypatch.setenv(audit.AUDIT_LOG_ENV, str(path))

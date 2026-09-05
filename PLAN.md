@@ -59,7 +59,10 @@ helm (Go SDK) → helm-c-sdk (C ABI) → helm-python-sdk (ctypes) → helm-pytho
       vendors helm-c); add a trivy scan gate to CI when CI lands
 - [ ] Publish to PyPI (after helm-python-sdk lands on PyPI — the
       dependency must be resolvable first)
-- [ ] CI: lint + mypy + pytest matrix, same posture as helm-python-sdk
+- [x] CI: lint + mypy + 3-OS pytest matrix (deps from PyPI), bandit SAST,
+      pip-audit, gitleaks, in-process DAST probe (scripts/dast_check.py),
+      trivy image scan gate (fixable HIGH/CRITICAL fail); SonarQube local
+      analysis clean (0 issues, quality gate OK)
 - [ ] Cluster e2e (kind): dry-run vs apply vs gates, agent smoke test
       with recorded transcripts
 - [ ] Optional: MCP elicitation-based confirmation once broadly supported

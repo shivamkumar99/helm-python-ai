@@ -1,0 +1,102 @@
+# Lint, types, tests, SAST, dependency and secret scans, a DAST probe of
+# the MCP server, and a scanned container image build.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.12"
+      - name: Install with dev tooling
+        run: python -m pip install -e ".[dev]"
+      - run: ruff check src tests scripts
+      - run: mypy
+
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            python: "3.10"
+          - os: ubuntu-latest
+            python: "3.13"
+          - os: macos-latest
+            python: "3.13"
+          - os: windows-latest
+            python: "3.13"
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install with dev tooling
+        run: python -m pip install -e ".[dev]"
+      - run: python -m pytest -q
+
+  dast:
+    # Dynamic security check: a real MCP client attacks the served surface
+    # with hostile inputs and requires typed, bounded refusals — no hangs,
+    # no leaked native handles, no raw tracebacks on the wire.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.12"
+      - name: Install the server
+        run: python -m pip install ".[server]"
+      - name: Attack the MCP server
+        run: python scripts/dast_check.py
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          # gitleaks scans commit history, not just the checkout.
+          fetch-depth: 0
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.12"
+      - name: bandit (SAST)
+        run: |
+          python -m pip install bandit
+          bandit -c pyproject.toml -r src scripts
+      - name: pip-audit (dependency vulnerabilities)
+        run: |
+          python -m pip install pip-audit
+          python -m pip install ".[all]"
+          pip-audit --progress-spinner off
+      - name: gitleaks (secret detection)
+        uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+  image:
+    # Build the container and fail on fixable HIGH/CRITICAL CVEs. Unfixed
+    # Debian base findings are reported but not fatal (nothing to act on).
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - name: Build the image
+        run: docker build -t helm-ai-mcp:ci .
+      - name: trivy image scan
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: helm-ai-mcp:ci
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: "1"

@@ -61,5 +61,6 @@ def test_run_blocking_propagates_exceptions() -> None:
     def boom() -> None:
         raise RuntimeError("kaput")
 
+    scenario = feedback.run_blocking("boom op", boom, report=report)
     with pytest.raises(RuntimeError, match="kaput"):
-        asyncio.run(feedback.run_blocking("boom op", boom, report=report))
+        asyncio.run(scenario)
