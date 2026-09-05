@@ -1,0 +1,9 @@
+helm-python
+Copyright 2026 Shivam Kumar
+https://github.com/shivamkumar99/helm-python
+
+This product includes software originally developed by Shivam Kumar.
+
+This product depends on helm-c-sdk and, through it, the Helm SDK
+(helm.sh/helm/v4), Copyright The Helm Authors, licensed under the Apache
+License, Version 2.0.
