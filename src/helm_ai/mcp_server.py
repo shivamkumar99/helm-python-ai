@@ -4,6 +4,15 @@ Run with ``helm-ai-mcp`` (or ``python -m helm_ai.mcp_server``) and register
 it in any MCP client. Requires the ``server`` extra (``pip install
 helm-python-ai[server]``).
 
+Client feedback:
+
+* Long-running tools (installs, upgrades, registry pulls) are async and
+  report progress every few seconds — elapsed time plus the Helm SDK's own
+  live log line — so the host can show activity instead of a stuck call.
+* ``helm_list_releases`` ships an MCP Apps (SEP-1865) dashboard: hosts
+  supporting the UI extension render the releases as a table; others see
+  the JSON text unchanged.
+
 Cluster writes stay dry-run only unless the process environment sets
 ``HELM_AI_ALLOW_WRITES=1``; uninstall/rollback additionally need
 ``HELM_AI_ALLOW_DESTRUCTIVE=1``. There is no interactive prompt over MCP,
@@ -15,10 +24,12 @@ from __future__ import annotations
 import json
 import logging
 import sys
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 try:
-    from mcp.server.mcpserver import MCPServer
+    from mcp.server.apps import Apps
+    from mcp.server.mcpserver import Context, MCPServer
 except ImportError as exc:  # pragma: no cover - import guard
     raise ImportError(
         "the MCP server needs the 'mcp' package (2.x): "
@@ -27,31 +38,54 @@ except ImportError as exc:  # pragma: no cover - import guard
 
 import helm_python as helm
 
-from . import tools
-
-mcp = MCPServer("helm")
+from . import feedback, tools
+from .apps_html import RELEASES_APP_HTML, RELEASES_APP_URI
 
 # Audit trail on stderr: MCP stdio framing owns stdout, stderr is ours.
 logging.basicConfig(stream=sys.stderr, level=logging.INFO,
                     format="%(asctime)s %(name)s %(levelname)s %(message)s")
+
+apps = Apps()
 
 
 def _dump(value: Any) -> str:
     return tools.clamp_output(json.dumps(value, indent=2, default=str))
 
 
-@mcp.tool()
+def _reporter(ctx: Context) -> Callable[[float, str], Awaitable[None]]:
+    """Adapt ``ctx.report_progress`` to the feedback callback shape."""
+
+    async def report(elapsed: float, message: str) -> None:
+        await ctx.report_progress(progress=elapsed, message=message)
+
+    return report
+
+
+# --- MCP Apps tool (registered on the extension, before the server) -------
+
+
+@apps.tool(
+    resource_uri=RELEASES_APP_URI,
+    description="List Helm releases (all states). name_filter is a regex on names.",
+)
 def helm_list_releases(
     namespace: str | None = None,
     all_namespaces: bool = False,
     name_filter: str | None = None,
 ) -> str:
-    """List Helm releases (all states). name_filter is a regex on names."""
     return _dump(
         tools.list_releases(
             namespace, all_namespaces=all_namespaces, name_filter=name_filter
         )
     )
+
+
+apps.add_html_resource(RELEASES_APP_URI, RELEASES_APP_HTML, title="Helm releases")
+
+mcp = MCPServer("helm", extensions=[apps])
+
+
+# --- fast read tools (sync; they finish well under a heartbeat) -----------
 
 
 @mcp.tool()
@@ -92,21 +126,6 @@ def helm_release_values(
 
 
 @mcp.tool()
-def helm_show_chart(
-    chart_ref: str,
-    output_format: str = "all",
-    version: str | None = None,
-    repo_url: str | None = None,
-) -> str:
-    """Show a chart's definition/values/readme/crds without installing it."""
-    return tools.clamp_output(
-        tools.show_chart(
-            chart_ref, output_format=output_format, version=version, repo_url=repo_url
-        )
-    )
-
-
-@mcp.tool()
 def helm_template_chart(
     chart_path: str,
     values_json: str | None = None,
@@ -125,94 +144,6 @@ def helm_lint_chart(chart_path: str, strict: bool = False, kube_version: str | N
 
 
 @mcp.tool()
-def helm_search_repository(repo_url: str, name_filter: str | None = None) -> str:
-    """Chart names and recent versions from an HTTP chart repository index."""
-    return _dump(tools.search_repository(repo_url, name_filter))
-
-
-@mcp.tool()
-def helm_chart_tags(oci_ref: str) -> str:
-    """Available tags of an oci://host/path/chart reference, newest first."""
-    return _dump(tools.chart_tags(oci_ref))
-
-
-@mcp.tool()
-def helm_install_release(
-    chart_ref: str,
-    name: str,
-    values_json: str | None = None,
-    namespace: str | None = None,
-    apply: bool = False,
-    create_namespace: bool = False,
-    chart_repo_url: str | None = None,
-    chart_version: str | None = None,
-) -> str:
-    """Install a chart. Runs as a server-side dry run unless apply=true
-    (real installs also need HELM_AI_ALLOW_WRITES=1 in the server env)."""
-    values = tools.parse_values_json(values_json)
-    return _dump(
-        tools.install_release(
-            chart_ref,
-            name,
-            values,
-            namespace,
-            apply=apply,
-            create_namespace=create_namespace,
-            chart_repo_url=chart_repo_url,
-            chart_version=chart_version,
-        )
-    )
-
-
-@mcp.tool()
-def helm_upgrade_release(
-    chart_ref: str,
-    name: str,
-    values_json: str | None = None,
-    namespace: str | None = None,
-    apply: bool = False,
-    reuse_values: bool = False,
-    chart_repo_url: str | None = None,
-    chart_version: str | None = None,
-) -> str:
-    """Upgrade a release. Runs as a server-side dry run unless apply=true
-    (real upgrades also need HELM_AI_ALLOW_WRITES=1 in the server env)."""
-    values = tools.parse_values_json(values_json)
-    return _dump(
-        tools.upgrade_release(
-            chart_ref,
-            name,
-            values,
-            namespace,
-            apply=apply,
-            reuse_values=reuse_values,
-            chart_repo_url=chart_repo_url,
-            chart_version=chart_version,
-        )
-    )
-
-
-@mcp.tool()
-def helm_uninstall_release(
-    name: str, confirm: str, namespace: str | None = None, keep_history: bool = False
-) -> str:
-    """Uninstall a release. confirm must equal the release name exactly, and
-    the server env must set HELM_AI_ALLOW_DESTRUCTIVE=1."""
-    return _dump(
-        tools.uninstall_release(name, namespace, confirm=confirm, keep_history=keep_history)
-    )
-
-
-@mcp.tool()
-def helm_rollback_release(
-    name: str, confirm: str, namespace: str | None = None, revision: int | None = None
-) -> str:
-    """Roll a release back to a revision (previous when omitted). confirm
-    must equal the release name; needs HELM_AI_ALLOW_DESTRUCTIVE=1."""
-    return _dump(tools.rollback_release(name, namespace, confirm=confirm, revision=revision))
-
-
-@mcp.tool()
 def helm_versions() -> str:
     """Versions of the Helm SDK stack this server is running on."""
     return _dump(
@@ -224,8 +155,159 @@ def helm_versions() -> str:
     )
 
 
+# --- network / long-running tools (async, with progress heartbeats) -------
+
+
+@mcp.tool()
+async def helm_show_chart(
+    chart_ref: str,
+    ctx: Context,
+    output_format: str = "all",
+    version: str | None = None,
+    repo_url: str | None = None,
+) -> str:
+    """Show a chart's definition/values/readme/crds without installing it."""
+    text = await feedback.run_blocking(
+        f"helm show {chart_ref}",
+        lambda: tools.show_chart(
+            chart_ref, output_format=output_format, version=version, repo_url=repo_url
+        ),
+        report=_reporter(ctx),
+    )
+    return tools.clamp_output(text)
+
+
+@mcp.tool()
+async def helm_search_repository(
+    repo_url: str, ctx: Context, name_filter: str | None = None
+) -> str:
+    """Chart names and recent versions from an HTTP chart repository index."""
+    result = await feedback.run_blocking(
+        f"fetching index {repo_url}",
+        tools.search_repository,
+        repo_url,
+        name_filter,
+        report=_reporter(ctx),
+    )
+    return _dump(result)
+
+
+@mcp.tool()
+async def helm_chart_tags(oci_ref: str, ctx: Context) -> str:
+    """Available tags of an oci://host/path/chart reference, newest first."""
+    result = await feedback.run_blocking(
+        f"listing tags {oci_ref}", tools.chart_tags, oci_ref, report=_reporter(ctx)
+    )
+    return _dump(result)
+
+
+@mcp.tool()
+async def helm_install_release(
+    chart_ref: str,
+    name: str,
+    ctx: Context,
+    values_json: str | None = None,
+    namespace: str | None = None,
+    apply: bool = False,
+    create_namespace: bool = False,
+    chart_repo_url: str | None = None,
+    chart_version: str | None = None,
+) -> str:
+    """Install a chart. Runs as a server-side dry run unless apply=true
+    (real installs also need HELM_AI_ALLOW_WRITES=1 in the server env)."""
+    values = tools.parse_values_json(values_json)
+    mode = "apply" if apply else "dry-run"
+    result = await feedback.run_blocking(
+        f"helm install {name} ({mode})",
+        lambda: tools.install_release(
+            chart_ref,
+            name,
+            values,
+            namespace,
+            apply=apply,
+            create_namespace=create_namespace,
+            chart_repo_url=chart_repo_url,
+            chart_version=chart_version,
+        ),
+        report=_reporter(ctx),
+    )
+    return _dump(result)
+
+
+@mcp.tool()
+async def helm_upgrade_release(
+    chart_ref: str,
+    name: str,
+    ctx: Context,
+    values_json: str | None = None,
+    namespace: str | None = None,
+    apply: bool = False,
+    reuse_values: bool = False,
+    chart_repo_url: str | None = None,
+    chart_version: str | None = None,
+) -> str:
+    """Upgrade a release. Runs as a server-side dry run unless apply=true
+    (real upgrades also need HELM_AI_ALLOW_WRITES=1 in the server env)."""
+    values = tools.parse_values_json(values_json)
+    mode = "apply" if apply else "dry-run"
+    result = await feedback.run_blocking(
+        f"helm upgrade {name} ({mode})",
+        lambda: tools.upgrade_release(
+            chart_ref,
+            name,
+            values,
+            namespace,
+            apply=apply,
+            reuse_values=reuse_values,
+            chart_repo_url=chart_repo_url,
+            chart_version=chart_version,
+        ),
+        report=_reporter(ctx),
+    )
+    return _dump(result)
+
+
+@mcp.tool()
+async def helm_uninstall_release(
+    name: str,
+    confirm: str,
+    ctx: Context,
+    namespace: str | None = None,
+    keep_history: bool = False,
+) -> str:
+    """Uninstall a release. confirm must equal the release name exactly, and
+    the server env must set HELM_AI_ALLOW_DESTRUCTIVE=1."""
+    result = await feedback.run_blocking(
+        f"helm uninstall {name}",
+        lambda: tools.uninstall_release(
+            name, namespace, confirm=confirm, keep_history=keep_history
+        ),
+        report=_reporter(ctx),
+    )
+    return _dump(result)
+
+
+@mcp.tool()
+async def helm_rollback_release(
+    name: str,
+    confirm: str,
+    ctx: Context,
+    namespace: str | None = None,
+    revision: int | None = None,
+) -> str:
+    """Roll a release back to a revision (previous when omitted). confirm
+    must equal the release name; needs HELM_AI_ALLOW_DESTRUCTIVE=1."""
+    result = await feedback.run_blocking(
+        f"helm rollback {name}",
+        lambda: tools.rollback_release(name, namespace, confirm=confirm, revision=revision),
+        report=_reporter(ctx),
+    )
+    return _dump(result)
+
+
 def main() -> None:
     """Entry point for ``helm-ai-mcp``: serve over stdio."""
+    feedback.capture_native_logs()
     mcp.run(transport="stdio")
 
 

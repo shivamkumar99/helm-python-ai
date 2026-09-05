@@ -60,6 +60,51 @@ Fifteen tools in three tiers:
 Cluster access uses the standard kubeconfig resolution (`KUBECONFIG`, then
 `~/.kube/config`, then in-cluster).
 
+### Live feedback
+
+Long-running tools (installs, upgrades, registry operations) are async and
+send MCP **progress notifications** every few seconds while they run —
+elapsed time plus the Helm SDK's own live log line ("waiting for
+resources…") — so the host can show real activity instead of a call that
+looks stuck.
+
+### Releases dashboard (MCP Apps)
+
+`helm_list_releases` ships an [MCP Apps](https://modelcontextprotocol.io)
+(SEP-1865) UI: hosts that support the extension — Claude among them —
+render the releases as an interactive table (status badges, revisions,
+chart versions) directly in the conversation. Hosts without the extension
+see the same JSON text as before; nothing is lost.
+
+### Docker
+
+```bash
+docker build -t helm-ai-mcp .
+```
+
+The multi-stage build compiles the native Helm library for the image's own
+architecture (amd64 and arm64 both work), assembles the Python stack, and
+ships a slim non-root runtime. MCP client configuration:
+
+```json
+{
+  "mcpServers": {
+    "helm": {
+      "command": "docker",
+      "args": ["run", "-i", "--rm",
+               "-v", "/home/you/.kube/config:/home/helm/.kube/config:ro",
+               "helm-ai-mcp"]
+    }
+  }
+}
+```
+
+`docker-compose.yml` wraps the same image for `docker compose run --rm
+helm-mcp` (compose `run`, not `up`: stdio servers are launched by their
+client). Pass `-e HELM_AI_ALLOW_WRITES=1` / `-e
+HELM_AI_ALLOW_DESTRUCTIVE=1` only when you mean it, and prefer mounting a
+kubeconfig whose RBAC matches the tier you enabled.
+
 ## The agent
 
 ```bash
@@ -82,7 +127,8 @@ Proceed? [y/N]
 
 `--yes` auto-approves gated operations (for scripted use, together with the
 environment gates); `--model` selects the Claude model (default
-`claude-opus-5`).
+`claude-opus-5`); `-v/--verbose` streams the Helm SDK's own log lines to
+stderr while operations run.
 
 ## Security model
 

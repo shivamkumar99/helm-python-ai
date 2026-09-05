@@ -32,6 +32,12 @@ helm (Go SDK) → helm-c-sdk (C ABI) → helm-python-sdk (ctypes) → helm-pytho
       output clamping, default timeouts, stderr audit trail
 - [x] Offline test suite (safety gates, chart tools, leak gate);
       cluster-dependent tests auto-skip
+- [x] Client feedback: async long-running tools with progress-notification
+      heartbeats fed by the Helm SDK's log-callback bridge
+      (`feedback.py`); MCP Apps (SEP-1865) releases dashboard
+      (`apps_html.py`); agent live narration + `--verbose` native logs
+- [x] Docker: multi-stage Dockerfile (arch-native build of libhelm_c,
+      non-root slim runtime) + compose wrapper for `docker compose run`
 - [ ] Publish to PyPI (after helm-python-sdk lands on PyPI — the
       dependency must be resolvable first)
 - [ ] CI: lint + mypy + pytest matrix, same posture as helm-python-sdk

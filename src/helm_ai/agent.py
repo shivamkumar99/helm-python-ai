@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import sys
 from collections.abc import Callable
 from typing import Any
@@ -25,7 +26,7 @@ except ImportError as exc:  # pragma: no cover - import guard
 
 import helm_python as helm
 
-from . import safety, tools
+from . import feedback, safety, tools
 
 DEFAULT_MODEL = "claude-opus-5"
 
@@ -416,13 +417,17 @@ def _terminal_approval(description: str) -> bool:
     return answer in {"y", "yes"}
 
 
-def _print_tool_calls(message: Any) -> None:
+def _narrate(message: Any) -> None:
+    """Live progress: the model's text as it arrives, tool calls on stderr."""
     for block in message.content:
-        if block.type == "tool_use":
+        if block.type == "text" and block.text:
+            print(block.text, flush=True)
+        elif block.type == "tool_use":
             preview = json.dumps(block.input, default=str)
             if len(preview) > 160:
                 preview = preview[:160] + "…"
             sys.stderr.write(f"  → {block.name} {preview}\n")
+            sys.stderr.flush()
 
 
 def run_mission(
@@ -465,7 +470,21 @@ def main() -> int:
         action="store_true",
         help="approve all gated operations without prompting (use with care)",
     )
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        action="store_true",
+        help="show the Helm SDK's own log stream while operations run",
+    )
     args = parser.parse_args()
+
+    logging.basicConfig(
+        stream=sys.stderr,
+        level=logging.DEBUG if args.verbose else logging.INFO,
+        format="%(name)s %(levelname)s %(message)s",
+    )
+    if args.verbose:
+        feedback.capture_native_logs(logging.DEBUG)
 
     if args.yes:
         safety.set_approval_hook(lambda _description: True)
@@ -473,10 +492,9 @@ def main() -> int:
         safety.set_approval_hook(_terminal_approval)
     # Otherwise the environment gates (HELM_AI_ALLOW_*) are the only channel.
 
-    answer = run_mission(
-        " ".join(args.prompt), model=args.model, on_message=_print_tool_calls
-    )
-    print(answer)
+    # _narrate already prints every message's text, so the returned final
+    # answer is not printed a second time.
+    run_mission(" ".join(args.prompt), model=args.model, on_message=_narrate)
     return 0
 
 
