@@ -57,11 +57,12 @@ helm (Go SDK) → helm-c-sdk (C ABI) → helm-python-sdk (ctypes) → helm-pytho
 - [x] helm-python-sdk 0.2.1 published to PyPI (all three wheels + sdist,
       GitHub release with the published files) — the dependency resolves,
       CI installs it from PyPI, and the trivy image-scan gate is in CI
-- [ ] Simplify the Dockerfile now that PyPI is live: on amd64 the clone
-      chain can become `pip install helm-python-sdk==<ver>` (wheel); a
-      pure-pip multi-arch image still waits on the linux-arm64 wheel
-      (helm-c release-matrix widening) — until then the source-build
-      stages stay for arm64
+- [ ] Simplify the Dockerfile to pure pip once helm-python-sdk ships a
+      linux-arm64 wheel. Unblocked upstream: helm-c-sdk's release matrix
+      now builds all five platforms (linux-amd64/arm64, darwin-arm64/
+      amd64, windows-amd64 — verified via a v0.2.2-rc.1 dry run, then
+      deleted); the next real helm-c release + a helm-python 0.2.2 with
+      the widened wheel matrix completes the chain
 - [ ] Publish helm-python-ai to PyPI — unblocked; needs the GitHub repo
       pushed, a wheels/publish workflow (pure-Python wheel, trivial
       compared to the SDK's), and a pending trusted publisher for the
