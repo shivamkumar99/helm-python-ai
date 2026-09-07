@@ -30,7 +30,7 @@ ARG HELM_PYTHON_VERSION=0.2.1
 ARG HELM_PYTHON_COMMIT=2e5032bc90fb764f756be0e8a5fd4dce91b56bbd
 
 # --- Stage 1: sources + native library for this architecture --------------
-FROM golang:1.26-bookworm@sha256:9fdc884aacc3bec89b20ffc69f4bb369c78210e3e4f600387b5128b12c199f81 AS native
+FROM golang:1.27-bookworm@sha256:648f440f42a0958804efb24df176f806f9d353b41f1c0627f666428e40310f6b AS native
 ARG HELM_PYTHON_VERSION
 ARG HELM_PYTHON_COMMIT
 RUN git clone --depth 1 --branch "v${HELM_PYTHON_VERSION}" \
