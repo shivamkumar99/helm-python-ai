@@ -54,11 +54,18 @@ helm (Go SDK) → helm-c-sdk (C ABI) → helm-python-sdk (ctypes) → helm-pytho
       spans + metrics, agent `invoke_agent` span with token usage, MCP
       AuditMiddleware, anticipated errors surfaced verbatim via ToolError.
       Backend deliberately unbundled (OTEL_EXPORTER_OTLP_ENDPOINT).
-- [ ] Post-PyPI: replace the Dockerfile clone chain with
-      `HELM_PYTHON_BUILD=1 pip install helm-python-sdk==<ver>` (sdist
-      vendors helm-c); add a trivy scan gate to CI when CI lands
-- [ ] Publish to PyPI (after helm-python-sdk lands on PyPI — the
-      dependency must be resolvable first)
+- [x] helm-python-sdk 0.2.1 published to PyPI (all three wheels + sdist,
+      GitHub release with the published files) — the dependency resolves,
+      CI installs it from PyPI, and the trivy image-scan gate is in CI
+- [ ] Simplify the Dockerfile now that PyPI is live: on amd64 the clone
+      chain can become `pip install helm-python-sdk==<ver>` (wheel); a
+      pure-pip multi-arch image still waits on the linux-arm64 wheel
+      (helm-c release-matrix widening) — until then the source-build
+      stages stay for arm64
+- [ ] Publish helm-python-ai to PyPI — unblocked; needs the GitHub repo
+      pushed, a wheels/publish workflow (pure-Python wheel, trivial
+      compared to the SDK's), and a pending trusted publisher for the
+      `helm-python-ai` project name
 - [x] CI: lint + mypy + 3-OS pytest matrix (deps from PyPI), bandit SAST,
       pip-audit, gitleaks, in-process DAST probe (scripts/dast_check.py),
       trivy image scan gate (fixable HIGH/CRITICAL fail); SonarQube local
