@@ -46,7 +46,7 @@ RUN HELM_C_VERSION="$(sed -n 's/^EXPECTED_HELM_C_VERSION: Final = "\(.*\)"$/\1/p
     && make -C /src/helm-c build VERSION="${HELM_C_VERSION}"
 
 # --- Stage 2: assemble the Python environment -----------------------------
-FROM python:3.13-slim@sha256:9d2e5553305c7c7b0097999bb17187c69b921ccd6bc9d40e4bb5ebe652c00285 AS build
+FROM python:3.14-slim@sha256:cad9a2c871761c413caa6fdd6441c783451e740a48aaeba60ae62a8b53525ef6 AS build
 ENV PIP_NO_CACHE_DIR=1 PIP_DISABLE_PIP_VERSION_CHECK=1
 # --upgrade-deps: the venv's seeded pip/setuptools carry known CVEs
 # (e.g. CVE-2025-47273); start from current ones.
@@ -68,7 +68,7 @@ RUN pip install "/src/helm-python-ai[server]" "msgpack>=1.2.1" \
     && pip uninstall -y setuptools wheel pip
 
 # --- Stage 3: runtime ------------------------------------------------------
-FROM python:3.13-slim@sha256:9d2e5553305c7c7b0097999bb17187c69b921ccd6bc9d40e4bb5ebe652c00285
+FROM python:3.14-slim@sha256:cad9a2c871761c413caa6fdd6441c783451e740a48aaeba60ae62a8b53525ef6
 LABEL org.opencontainers.image.title="helm-ai-mcp" \
       org.opencontainers.image.description="Helm v4 MCP server over helm-python-sdk (stdio)" \
       org.opencontainers.image.source="https://github.com/shivamkumar99/helm-python-ai" \
