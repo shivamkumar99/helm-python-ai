@@ -70,8 +70,10 @@ helm (Go SDK) → helm-c-sdk (C ABI) → helm-python-sdk (ctypes) → helm-pytho
       pip-audit, gitleaks, in-process DAST probe (scripts/dast_check.py),
       trivy image scan gate (fixable HIGH/CRITICAL fail); SonarQube local
       analysis clean (0 issues, quality gate OK)
-- [ ] Cluster e2e (kind): dry-run vs apply vs gates, agent smoke test
-      with recorded transcripts
+- [x] Cluster e2e (kind): dry-run leaves no trace, gated
+      install/upgrade/rollback/uninstall lifecycle through the tool layer
+      and over the MCP wire, leak gate — green against a local kind
+      cluster; CI job added (helm/kind-action)
 - [ ] Optional: MCP elicitation-based confirmation once broadly supported
       by clients, replacing the env-only channel over MCP
 

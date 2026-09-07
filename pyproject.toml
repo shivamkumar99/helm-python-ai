@@ -49,6 +49,9 @@ packages = ["src/helm_ai"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+  "cluster: needs a reachable Kubernetes cluster (auto-skips without one)",
+]
 
 [tool.ruff]
 line-length = 100
