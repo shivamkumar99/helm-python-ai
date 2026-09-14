@@ -63,10 +63,13 @@ helm (Go SDK) → helm-c-sdk (C ABI) → helm-python-sdk (ctypes) → helm-pytho
       amd64, windows-amd64 — verified via a v0.2.2-rc.1 dry run, then
       deleted); the next real helm-c release + a helm-python 0.2.2 with
       the widened wheel matrix completes the chain
-- [ ] Publish helm-python-ai to PyPI — unblocked; needs the GitHub repo
-      pushed, a wheels/publish workflow (pure-Python wheel, trivial
-      compared to the SDK's), and a pending trusted publisher for the
-      `helm-python-ai` project name
+- [ ] Publish helm-python-ai to PyPI. The release workflow is in place
+      (wheels.yml: build + twine check + tag/version match + clean-venv
+      smoke of the wheel with all extras → trusted-publishing upload,
+      environment `pypi` → GitHub release with the files; packaging
+      verified locally end to end). Remaining: the pending trusted
+      publisher on PyPI (project `helm-python-ai`, workflow `wheels.yml`,
+      environment `pypi`), flip the repo public, then tag v0.1.0
 - [x] CI: lint + mypy + 3-OS pytest matrix (deps from PyPI), bandit SAST,
       pip-audit, gitleaks, in-process DAST probe (scripts/dast_check.py),
       trivy image scan gate (fixable HIGH/CRITICAL fail); SonarQube local

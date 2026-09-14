@@ -1,0 +1,84 @@
+# Build and publish the package on a version tag. Pure Python: one wheel
+# plus the sdist, no native binaries (those live in helm-python-sdk's own
+# wheels). Publishing uses PyPI trusted publishing (OIDC) — no tokens.
+name: Wheels
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.12"
+      - name: Build wheel and sdist
+        run: |
+          python -m pip install --upgrade build twine
+          python -m build
+          python -m twine check dist/*
+      - name: Tag matches the package version
+        run: |
+          VER="${GITHUB_REF_NAME#v}"
+          ls "dist/helm_python_ai-${VER}-py3-none-any.whl" \
+             "dist/helm_python_ai-${VER}.tar.gz"
+      - name: Smoke-test the wheel in a clean environment
+        run: |
+          python -m venv /tmp/verify
+          /tmp/verify/bin/pip install --quiet "$(ls dist/*.whl)[all]"
+          /tmp/verify/bin/python - <<'PY'
+          import asyncio
+          import helm_ai
+          from helm_ai import agent, mcp_server
+
+          listed = asyncio.run(mcp_server.mcp.list_tools())
+          assert len(listed) == 15, f"expected 15 MCP tools, got {len(listed)}"
+          assert len(agent.TOOLS) == 14
+          assert callable(mcp_server.main) and callable(agent.main)
+          print("wheel verified:", helm_ai.__version__)
+          PY
+      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: dist
+          path: dist/*
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6
+        with:
+          name: dist
+          path: dist
+      - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
+        with:
+          # A partially-published release must be resumable: files that
+          # already made it to PyPI are skipped, not fatal.
+          skip-existing: true
+
+  release:
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6
+        with:
+          name: dist
+          path: dist
+      - name: Create GitHub release with the published files
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
+        with:
+          generate_release_notes: true
+          files: dist/*
