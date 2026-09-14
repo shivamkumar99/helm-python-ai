@@ -10,7 +10,7 @@ readme = "README.md"
 license = "Apache-2.0"
 requires-python = ">=3.10"
 authors = [{ name = "Shivam Kumar" }]
-keywords = ["helm", "kubernetes", "mcp", "agent", "ai", "sdk"]
+keywords = ["helm", "kubernetes", "mcp", "mcp-server", "model-context-protocol", "agent", "ai", "llm", "claude", "devops"]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Intended Audience :: Developers",

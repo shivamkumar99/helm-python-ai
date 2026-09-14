@@ -1,8 +1,19 @@
-# helm-python-ai
+# helm-python-ai — MCP Server and AI Agent for Helm
 
-AI tooling for [Helm v4](https://helm.sh), built on
-[helm-python-sdk](https://github.com/shivamkumar99/helm-python-sdk) — the
-Python binding over Helm's real Go SDK. No `helm` binary, no `kubectl`, no
+[![PyPI](https://img.shields.io/pypi/v/helm-python-ai?logo=pypi&logoColor=white)](https://pypi.org/project/helm-python-ai/)
+[![CI](https://github.com/shivamkumar99/helm-python-ai/actions/workflows/ci.yml/badge.svg)](https://github.com/shivamkumar99/helm-python-ai/actions/workflows/ci.yml)
+[![License: Apache-2.0](https://img.shields.io/github/license/shivamkumar99/helm-python-ai)](LICENSE)
+[![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-3776AB?logo=python&logoColor=white)](pyproject.toml)
+[![MCP](https://img.shields.io/badge/MCP-server%20%2B%20Apps%20UI-informational)](https://modelcontextprotocol.io)
+
+A [Model Context Protocol](https://modelcontextprotocol.io) (MCP) server and an
+autonomous AI agent for [Helm](https://helm.sh), the Kubernetes package
+manager. Manage Helm releases from Claude Code, Claude Desktop, or any MCP
+client — or hand a plain-language mission to an LLM agent that investigates
+and operates your deployments — with safety tiers, dry-run defaults, and a
+structured audit trail. Built in Python on
+[helm-python-sdk](https://github.com/shivamkumar99/helm-python-sdk), which
+binds Helm's official Go SDK directly: no `helm` binary, no `kubectl`, no
 shelling out.
 
 Two fronts share one safety-tiered tool layer:
@@ -89,9 +100,9 @@ by manifest digest, and the helm-python-sdk clone is verified against the
 exact commit its version tag pointed to — a moved tag fails the build.
 Only helm-python-sdk is pinned; the helm-c-sdk version is read from
 helm-python-sdk's own `EXPECTED_HELM_C_VERSION` pin, so the native
-dependency stays owned by the package that declares it. (Once
-helm-python-sdk is on PyPI, the build reduces to installing it — the
-sdist vendors and compiles helm-c itself.)
+dependency stays owned by the package that declares it. (The build
+collapses to a plain `pip install helm-python-sdk` once its linux-arm64
+wheel ships.)
 
 Run it with least privilege (no capabilities, no privilege escalation,
 read-only root filesystem, tmpfs scratch space):
