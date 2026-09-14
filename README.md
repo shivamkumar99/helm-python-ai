@@ -115,8 +115,8 @@ read-only root filesystem, tmpfs scratch space):
       "args": ["run", "-i", "--rm", "--init",
                "--read-only", "--cap-drop", "ALL",
                "--security-opt", "no-new-privileges",
-               "--tmpfs", "/tmp", "--tmpfs", "/home/helm",
-               "-v", "/home/you/.kube/config:/home/helm/.kube/config:ro",
+               "--tmpfs", "/tmp", "--tmpfs", "/home/nonroot",
+               "-v", "/home/you/.kube/config:/home/nonroot/.kube/config:ro",
                "helm-ai-mcp"]
     }
   }

@@ -7,8 +7,8 @@
 #
 #   docker build -t helm-ai-mcp .
 #   docker run -i --rm --init --read-only --cap-drop ALL \
-#     --security-opt no-new-privileges --tmpfs /tmp --tmpfs /home/helm \
-#     -v ~/.kube/config:/home/helm/.kube/config:ro helm-ai-mcp
+#     --security-opt no-new-privileges --tmpfs /tmp --tmpfs /home/nonroot \
+#     -v ~/.kube/config:/home/nonroot/.kube/config:ro helm-ai-mcp
 #
 # MCP servers speak stdio: clients launch the container with -i (see
 # README "Docker" for the client configuration snippet).
@@ -16,10 +16,9 @@
 # Dependency chain: only helm-python-sdk is pinned here (tag + commit).
 # The helm-c-sdk version is NOT chosen by this file — it is read from
 # helm-python-sdk's own pin (EXPECTED_HELM_C_VERSION), so the dependency
-# stays owned by the package that declares it. Once helm-python-sdk is
-# on PyPI this whole clone-and-build collapses to
-# `HELM_PYTHON_BUILD=1 pip install helm-python-sdk==<ver>` — the sdist
-# vendors the helm-c source and its build hook compiles it.
+# stays owned by the package that declares it. Once helm-python-sdk
+# ships a linux-arm64 wheel, this clone-and-build collapses to a plain
+# `pip install helm-python-sdk==<ver>`.
 #
 # Supply-chain pinning: base images are pinned by multi-arch manifest
 # digest, and the helm-python-sdk clone is verified against the exact
@@ -46,7 +45,9 @@ RUN HELM_C_VERSION="$(sed -n 's/^EXPECTED_HELM_C_VERSION: Final = "\(.*\)"$/\1/p
     && make -C /src/helm-c build VERSION="${HELM_C_VERSION}"
 
 # --- Stage 2: assemble the Python environment -----------------------------
-FROM python:3.13-slim@sha256:9d2e5553305c7c7b0097999bb17187c69b921ccd6bc9d40e4bb5ebe652c00285 AS build
+# Docker Hardened Images (Debian/glibc): the -dev variant carries shell and
+# pip for building; the runtime variant below ships near-zero CVEs.
+FROM dhi.io/python:3.13-dev@sha256:b4399bc6cbe56230cbccf203f0591520dd5f1629ccd90ba29bd3082e99807ea3 AS build
 ENV PIP_NO_CACHE_DIR=1 PIP_DISABLE_PIP_VERSION_CHECK=1
 # --upgrade-deps: the venv's seeded pip/setuptools carry known CVEs
 # (e.g. CVE-2025-47273); start from current ones.
@@ -68,26 +69,20 @@ RUN pip install "/src/helm-python-ai[server]" "msgpack>=1.2.1" \
     && pip uninstall -y setuptools wheel pip
 
 # --- Stage 3: runtime ------------------------------------------------------
-FROM python:3.13-slim@sha256:9d2e5553305c7c7b0097999bb17187c69b921ccd6bc9d40e4bb5ebe652c00285
+# The hardened runtime variant is what stage 3 previously hand-rolled:
+# non-root (65532), no shell, no pip/ensurepip, minimal libraries.
+FROM dhi.io/python:3.13@sha256:4e7d2414a4921335d88128c9b74c45dbd7791c4240fa2b0a5642ff86f1267cbe
 LABEL org.opencontainers.image.title="helm-ai-mcp" \
       org.opencontainers.image.description="Helm v4 MCP server over helm-python-sdk (stdio)" \
       org.opencontainers.image.source="https://github.com/shivamkumar99/helm-python-ai" \
       org.opencontainers.image.licenses="Apache-2.0"
-RUN useradd --create-home --shell /usr/sbin/nologin helm
-# No installer in the runtime image: the base's system pip (which vendors
-# its own copies of msgpack etc. — trivy flags them) and ensurepip go
-# away; the venv is complete and nothing should install packages here.
-RUN rm -rf /usr/local/lib/python3.13/site-packages/pip* \
-           /usr/local/lib/python3.13/ensurepip \
-           /usr/local/bin/pip*
 # The venv stays root-owned: the runtime user can execute but not modify it.
 COPY --from=build /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH" \
-    HOME=/home/helm \
+    HOME=/home/nonroot \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
-USER helm
-WORKDIR /home/helm
+WORKDIR /home/nonroot
 
 # Safety gates default OFF; opt in explicitly at run time, e.g.
 #   docker run -i --rm -e HELM_AI_ALLOW_WRITES=1 ...

@@ -43,10 +43,12 @@ helm (Go SDK) → helm-c-sdk (C ABI) → helm-python-sdk (ctypes) → helm-pytho
       installers stripped + msgpack floor, system pip/ensurepip removed
       from runtime, least-privilege runtime (cap_drop ALL,
       no-new-privileges, read_only, tmpfs, pids_limit, init) verified
-      working. Trivy HIGH/CRITICAL: Python 0; remaining 54 are Debian
-      base packages with no fix shipped (perl-base, util-linux, ncurses,
-      sqlite, systemd libs) — exploitability mitigated by the runtime
-      posture; revisit with a distroless/chiselled base later
+      working. Base images since moved to Docker Hardened Images
+      (dhi.io/python 3.13, Debian/glibc: -dev builds the venv, the
+      no-shell non-root runtime variant ships) — trivy HIGH/CRITICAL
+      dropped 54 → 10 (Python 0, none fixable; residue is
+      ncurses/expat/uuid libs Debian has no fix for), image 744 → 632 MB.
+      Pulling dhi.io needs a free Docker login
 - [x] Observability & audit: vendor-neutral OTLP wiring (`telemetry.py`,
       env-gated, `observability` extra), structured JSONL audit trail
       with trace correlation (`audit.py`: tool.call/safety.decision/

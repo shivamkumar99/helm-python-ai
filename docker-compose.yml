@@ -33,7 +33,7 @@ services:
     read_only: true
     tmpfs:
       - /tmp
-      - /home/helm
+      - /home/nonroot
     pids_limit: 256
     environment:
       # Safety gates stay off unless you export them on the host first:
@@ -43,4 +43,4 @@ services:
     volumes:
       # Read-only cluster access; swap in a service-account kubeconfig with
       # RBAC matching the tier you enabled (see README "Security model").
-      - ${KUBECONFIG:-~/.kube/config}:/home/helm/.kube/config:ro
+      - ${KUBECONFIG:-~/.kube/config}:/home/nonroot/.kube/config:ro
