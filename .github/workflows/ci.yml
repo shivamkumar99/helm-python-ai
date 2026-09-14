@@ -107,6 +107,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - name: Log in to dhi.io (Docker Hardened Images)
+        # The hardened base images require an authenticated pull; a free
+        # Docker account works. Secrets: DOCKERHUB_USERNAME + DOCKERHUB_TOKEN
+        # (a read-only access token).
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: dhi.io
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
       - name: Build the image
         run: docker build -t helm-ai-mcp:ci .
       - name: trivy image scan
