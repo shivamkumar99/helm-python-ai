@@ -104,6 +104,9 @@ jobs:
   image:
     # Build the container and fail on fixable HIGH/CRITICAL CVEs. Unfixed
     # Debian base findings are reported but not fatal (nothing to act on).
+    # Dependabot PRs get no repository secrets, so the dhi.io login cannot
+    # work there; the gate still runs on every push to main.
+    if: github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
