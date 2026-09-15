@@ -20,7 +20,7 @@
 ARG HELM_PYTHON_VERSION=0.2.2
 
 # --- Stage 1: assemble the Python environment ------------------------------
-FROM dhi.io/python:3.13-dev@sha256:b4399bc6cbe56230cbccf203f0591520dd5f1629ccd90ba29bd3082e99807ea3 AS build
+FROM dhi.io/python:3.13-dev@sha256:0749e2f0f23d7f10f63ee1f35ef3061a59bac601f687a67505ca670a58c1b8fb AS build
 ARG HELM_PYTHON_VERSION
 ENV PIP_NO_CACHE_DIR=1 PIP_DISABLE_PIP_VERSION_CHECK=1
 # --upgrade-deps: the venv's seeded pip/setuptools carry known CVEs
@@ -38,7 +38,7 @@ RUN pip install "helm-python-sdk==${HELM_PYTHON_VERSION}" \
     && pip uninstall -y setuptools wheel pip
 
 # --- Stage 2: runtime ------------------------------------------------------
-FROM dhi.io/python:3.13@sha256:4e7d2414a4921335d88128c9b74c45dbd7791c4240fa2b0a5642ff86f1267cbe
+FROM dhi.io/python:3.13@sha256:eedfbaf99554976858bd219321f4e79c937d63d6582574eca9c8ef2e148a0e4c
 LABEL org.opencontainers.image.title="helm-ai-mcp" \
       org.opencontainers.image.description="Helm v4 MCP server over helm-python-sdk (stdio)" \
       org.opencontainers.image.source="https://github.com/shivamkumar99/helm-python-ai" \
