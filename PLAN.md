@@ -59,19 +59,14 @@ helm (Go SDK) → helm-c-sdk (C ABI) → helm-python-sdk (ctypes) → helm-pytho
 - [x] helm-python-sdk 0.2.1 published to PyPI (all three wheels + sdist,
       GitHub release with the published files) — the dependency resolves,
       CI installs it from PyPI, and the trivy image-scan gate is in CI
-- [ ] Simplify the Dockerfile to pure pip once helm-python-sdk ships a
-      linux-arm64 wheel. Unblocked upstream: helm-c-sdk's release matrix
-      now builds all five platforms (linux-amd64/arm64, darwin-arm64/
-      amd64, windows-amd64 — verified via a v0.2.2-rc.1 dry run, then
-      deleted); the next real helm-c release + a helm-python 0.2.2 with
-      the widened wheel matrix completes the chain
-- [ ] Publish helm-python-ai to PyPI. The release workflow is in place
-      (wheels.yml: build + twine check + tag/version match + clean-venv
-      smoke of the wheel with all extras → trusted-publishing upload,
-      environment `pypi` → GitHub release with the files; packaging
-      verified locally end to end). Remaining: the pending trusted
-      publisher on PyPI (project `helm-python-ai`, workflow `wheels.yml`,
-      environment `pypi`), flip the repo public, then tag v0.1.0
+- [x] Pure-pip Docker build: helm-c-sdk v0.2.2 (five platforms) and
+      helm-python-sdk 0.2.2 (five wheels incl. linux-arm64) shipped, so
+      the golang stage and source clone chain are gone — the DHI dev
+      stage installs from PyPI and the hardened runtime ships it
+      (632 → 486 MB, trivy fixable 0)
+- [x] Published: helm-python-ai 0.1.0 on PyPI (wheel + sdist, trusted
+      publishing, GitHub release) — verified by a clean-venv
+      `pip install helm-python-ai[all]` pulling helm-python-sdk 0.2.2
 - [x] CI: lint + mypy + 3-OS pytest matrix (deps from PyPI), bandit SAST,
       pip-audit, gitleaks, in-process DAST probe (scripts/dast_check.py),
       trivy image scan gate (fixable HIGH/CRITICAL fail); SonarQube local
