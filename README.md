@@ -93,16 +93,12 @@ see the same JSON text as before; nothing is lost.
 docker build -t helm-ai-mcp .
 ```
 
-The multi-stage build compiles the native Helm library for the image's own
-architecture (amd64 and arm64 both work), assembles the Python stack, and
-ships a slim non-root runtime. Supply-chain inputs are pinned: base images
-by manifest digest, and the helm-python-sdk clone is verified against the
-exact commit its version tag pointed to — a moved tag fails the build.
-Only helm-python-sdk is pinned; the helm-c-sdk version is read from
-helm-python-sdk's own `EXPECTED_HELM_C_VERSION` pin, so the native
-dependency stays owned by the package that declares it. (The build
-collapses to a plain `pip install helm-python-sdk` once its linux-arm64
-wheel ships.)
+The build installs helm-python-sdk straight from PyPI — prebuilt wheels
+exist for amd64 and arm64, so nothing compiles — on Docker Hardened
+Images (digest-pinned, Debian/glibc): a `-dev` stage assembles the venv
+and the hardened runtime variant ships it (non-root, no shell, no
+installers, near-zero CVEs). Pulling `dhi.io` needs a free Docker
+login.
 
 Run it with least privilege (no capabilities, no privilege escalation,
 read-only root filesystem, tmpfs scratch space):

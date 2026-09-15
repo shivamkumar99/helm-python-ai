@@ -26,7 +26,7 @@ classifiers = [
 # The shared tool layer needs only the Helm binding; the two fronts pull
 # their own runtime through extras so an MCP-only install never drags in
 # the Anthropic SDK and vice versa.
-dependencies = ["helm-python-sdk>=0.2.1"]
+dependencies = ["helm-python-sdk>=0.2.2"]
 
 [project.urls]
 Homepage = "https://github.com/shivamkumar99/helm-python-ai"
