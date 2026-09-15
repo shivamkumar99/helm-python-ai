@@ -57,6 +57,7 @@ MAX_VALUES_BYTES = 1_000_000
 #: truncated with a marker rather than flooding the caller's context.
 MAX_OUTPUT_CHARS = 200_000
 
+
 def parse_values_json(values_json: str | None) -> Json | None:
     """Parse a model-supplied values document, strictly.
 

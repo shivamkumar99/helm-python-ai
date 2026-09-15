@@ -20,9 +20,7 @@ def test_run_blocking_returns_value_and_reports() -> None:
         reports.append((elapsed, message))
 
     async def scenario() -> str:
-        return await feedback.run_blocking(
-            "demo op", lambda: "result", report=report
-        )
+        return await feedback.run_blocking("demo op", lambda: "result", report=report)
 
     assert asyncio.run(scenario()) == "result"
     messages = [message for _, message in reports]
@@ -37,9 +35,7 @@ def test_run_blocking_heartbeats_while_running(monkeypatch: pytest.MonkeyPatch) 
     async def report(_elapsed: float, message: str) -> None:
         reports.append(message)
 
-    asyncio.run(
-        feedback.run_blocking("slow op", lambda: time.sleep(0.2), report=report)
-    )
+    asyncio.run(feedback.run_blocking("slow op", lambda: time.sleep(0.2), report=report))
     beats = [message for message in reports if "slow op: running" in message]
     assert beats, f"expected heartbeat reports, got {reports}"
 

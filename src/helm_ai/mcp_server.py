@@ -36,8 +36,7 @@ try:
     from mcp.server.mcpserver.exceptions import ToolError
 except ImportError as exc:  # pragma: no cover - import guard
     raise ImportError(
-        "the MCP server needs the 'mcp' package (2.x): "
-        "pip install helm-python-ai[server]"
+        "the MCP server needs the 'mcp' package (2.x): pip install helm-python-ai[server]"
     ) from exc
 
 import helm_python as helm
@@ -72,9 +71,11 @@ def _tool_errors(fn: Any) -> Any:
 
     return wrapper
 
+
 # Audit trail on stderr: MCP stdio framing owns stdout, stderr is ours.
-logging.basicConfig(stream=sys.stderr, level=logging.INFO,
-                    format="%(asctime)s %(name)s %(levelname)s %(message)s")
+logging.basicConfig(
+    stream=sys.stderr, level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s"
+)
 
 apps = Apps()
 
@@ -142,9 +143,7 @@ def helm_list_releases(
     name_filter: str | None = None,
 ) -> str:
     return _dump(
-        tools.list_releases(
-            namespace, all_namespaces=all_namespaces, name_filter=name_filter
-        )
+        tools.list_releases(namespace, all_namespaces=all_namespaces, name_filter=name_filter)
     )
 
 
@@ -192,9 +191,7 @@ def helm_release_values(
     revision: int | None = None,
 ) -> str:
     """A release's user-supplied values (computed values with all_values)."""
-    return _dump(
-        tools.release_values(name, namespace, all_values=all_values, revision=revision)
-    )
+    return _dump(tools.release_values(name, namespace, all_values=all_values, revision=revision))
 
 
 @mcp.tool()

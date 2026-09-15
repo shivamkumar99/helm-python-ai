@@ -124,9 +124,7 @@ async def attack() -> None:
         # A legitimate render still works after all the abuse.
         with tempfile.TemporaryDirectory() as tmp:
             helm.Chart.create("probe", tmp).close()
-            rendered = await client.call_tool(
-                "helm_template_chart", {"chart_path": f"{tmp}/probe"}
-            )
+            rendered = await client.call_tool("helm_template_chart", {"chart_path": f"{tmp}/probe"})
             check(not rendered.is_error, "server still healthy after attacks")
 
     check(helm.open_handles_count() == 0, "no native handles leaked")

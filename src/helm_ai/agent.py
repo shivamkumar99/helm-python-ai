@@ -80,9 +80,7 @@ _CAUGHT = (helm.HelmError, safety.SafetyError, ValueError, OSError)
 
 
 @beta_tool
-def list_releases(
-    namespace: str = "", all_namespaces: bool = False, name_filter: str = ""
-) -> str:
+def list_releases(namespace: str = "", all_namespaces: bool = False, name_filter: str = "") -> str:
     """List Helm releases in every state.
 
     Args:
@@ -127,9 +125,7 @@ def release_manifest(name: str, namespace: str = "", revision: int = 0) -> str:
         revision: Specific revision to read; 0 means the latest.
     """
     try:
-        return tools.clamp_output(
-            tools.release_manifest(name, namespace or None, revision or None)
-        )
+        return tools.clamp_output(tools.release_manifest(name, namespace or None, revision or None))
     except _CAUGHT as exc:
         return _err(exc)
 
@@ -229,9 +225,7 @@ def lint_chart(chart_path: str, strict: bool = False, kube_version: str = "") ->
     """
     try:
         return _json(
-            tools.lint_chart(
-                chart_path, strict=strict or None, kube_version=kube_version or None
-            )
+            tools.lint_chart(chart_path, strict=strict or None, kube_version=kube_version or None)
         )
     except _CAUGHT as exc:
         return _err(exc)

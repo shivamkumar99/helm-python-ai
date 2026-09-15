@@ -40,9 +40,7 @@ def test_template_chart(chart_dir: Path) -> None:
 
 
 def test_template_chart_applies_values(chart_dir: Path) -> None:
-    manifests = tools.template_chart(
-        str(chart_dir), {"replicaCount": 3}, name="demo"
-    )
+    manifests = tools.template_chart(str(chart_dir), {"replicaCount": 3}, name="demo")
     deployment = next(body for path, body in manifests.items() if "deployment" in path)
     assert "replicas: 3" in deployment
 
