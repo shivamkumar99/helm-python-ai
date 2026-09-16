@@ -48,7 +48,7 @@ def chart_dir(tmp_path_factory: pytest.TempPathFactory) -> Path:
     return root / "demo"
 
 
-@pytest.fixture()
+@pytest.fixture
 def namespace() -> Iterator[str]:
     name = f"helm-ai-e2e-{uuid.uuid4().hex[:8]}"
     yield name
