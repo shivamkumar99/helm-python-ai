@@ -1,0 +1,29 @@
+version: 2
+registries:
+  dhi:
+    # Digest updates for the hardened base images need an authenticated
+    # pull; mirror the two Actions secrets as Dependabot secrets.
+    type: docker-registry
+    url: dhi.io
+    username: ${{secrets.DOCKERHUB_USERNAME}}
+    password: ${{secrets.DOCKERHUB_TOKEN}}
+updates:
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      python-deps:
+        patterns: ["*"]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      github-actions:
+        patterns: ["*"]
+  - package-ecosystem: docker
+    directory: /
+    registries: ["dhi"]
+    schedule:
+      interval: weekly

@@ -1,0 +1,149 @@
+# Lint, types, tests, SAST, dependency and secret scans, a DAST probe of
+# the MCP server, and a scanned container image build.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - name: Install with dev tooling
+        run: python -m pip install -e ".[dev]"
+      - run: ruff check src tests scripts
+      # Covers README.md and PLAN.md too: ruff formats Python code blocks
+      # inside markdown, so a fenced example added to either must be
+      # formatted like the rest of the tree.
+      - run: ruff format --check .
+      - run: mypy
+
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            python: "3.10"
+          - os: ubuntu-latest
+            python: "3.13"
+          - os: macos-latest
+            python: "3.13"
+          - os: windows-latest
+            python: "3.13"
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install with dev tooling
+        run: python -m pip install -e ".[dev]"
+      - run: python -m pytest -q
+
+  dast:
+    # Dynamic security check: a real MCP client attacks the served surface
+    # with hostile inputs and requires typed, bounded refusals — no hangs,
+    # no leaked native handles, no raw tracebacks on the wire.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - name: Install the server
+        run: python -m pip install ".[server]"
+      - name: Attack the MCP server
+        run: python scripts/dast_check.py
+
+  cluster-e2e:
+    # The allowed paths of the safety tiers against a real cluster: dry-run
+    # leaves no trace, gated apply/upgrade/rollback/uninstall work, once
+    # through the tool layer and once over the MCP wire.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - uses: helm/kind-action@06c1ae10762d3b9c1644e7fe69596ae519e015a2 # v1.15.0
+      - name: Install with dev tooling
+        run: python -m pip install -e ".[dev]"
+      - name: Release lifecycle against kind
+        run: python -m pytest -m cluster -v
+
+  security:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # gitleaks lists the pull request's commits before scanning it, and
+      # the workflow-wide `contents: read` leaves pull-requests at none.
+      # A private repository answers that call with "Resource not
+      # accessible by integration"; a public one happens to allow it, so
+      # this is also insurance against the repository turning private.
+      # Read is the most a Dependabot pull request can be granted, and all
+      # the action needs.
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # gitleaks scans commit history, not just the checkout.
+          fetch-depth: 0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - name: bandit (SAST)
+        run: |
+          python -m pip install bandit
+          bandit -c pyproject.toml -r src scripts
+      - name: pip-audit (dependency vulnerabilities)
+        run: |
+          python -m pip install pip-audit
+          python -m pip install ".[all]"
+          pip-audit --progress-spinner off
+      - name: gitleaks (secret detection)
+        uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          # Findings reach us through the exit code and the SARIF artifact;
+          # PR comments add nothing and need an API scope this job does not
+          # want. The action compares this against the literal string.
+          GITLEAKS_ENABLE_COMMENTS: "false"
+
+  image:
+    # Build the container and fail on fixable HIGH/CRITICAL CVEs. Unfixed
+    # Debian base findings are reported but not fatal (nothing to act on).
+    # Dependabot PRs get no repository secrets, so the dhi.io login cannot
+    # work there; the gate still runs on every push to main.
+    if: github.actor != 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Log in to dhi.io (Docker Hardened Images)
+        # The hardened base images require an authenticated pull; a free
+        # Docker account works. Secrets: DOCKERHUB_USERNAME + DOCKERHUB_TOKEN
+        # (a read-only access token).
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: dhi.io
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Build the image
+        run: docker build -t helm-ai-mcp:ci .
+      - name: trivy image scan
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: helm-ai-mcp:ci
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: "1"
+          trivyignores: .trivyignore

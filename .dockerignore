@@ -1,0 +1,13 @@
+.git
+.venv
+.ci-venv
+__pycache__
+*.py[cod]
+dist
+build
+.pytest_cache
+.mypy_cache
+.ruff_cache
+tests
+CLAUDE.md
+.claude

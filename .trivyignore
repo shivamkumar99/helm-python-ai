@@ -1,0 +1,15 @@
+# Triaged findings. Everything here was checked against the image's own
+# filesystem, not waved through: re-verify with
+#   CID=$(docker create <image>); docker export "$CID" | tar -t | grep -E '/(mount|umount|nsenter|unshare)$'
+#
+# util-linux, via libuuid1. The image ships libuuid.so.1 (Python's uuid
+# module links it) and none of the util-linux binaries — no mount,
+# umount, nsenter, or unshare. All four advisories are flaws in those
+# mount helpers, so the vulnerable code is not present. Trivy attributes
+# them to libuuid1 because Debian builds it from the util-linux source
+# package. Drop these entries the moment any util-linux binary enters
+# the image.
+CVE-2026-76642
+CVE-2026-78408
+CVE-2026-78409
+CVE-2026-78410

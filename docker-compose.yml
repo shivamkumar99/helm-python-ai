@@ -1,0 +1,46 @@
+# helm-ai-mcp via docker compose.
+#
+# MCP stdio servers are launched by their client, so the natural compose
+# verb is `run`, not `up`:
+#
+#   docker compose build
+#   docker compose run --rm helm-mcp        # interactive smoke test
+#
+# MCP client configuration (Claude Code / Claude Desktop):
+#   {
+#     "mcpServers": {
+#       "helm": {
+#         "command": "docker",
+#         "args": ["compose", "-f", "/path/to/helm-python-ai/docker-compose.yml",
+#                  "run", "--rm", "helm-mcp"]
+#       }
+#     }
+#   }
+
+services:
+  helm-mcp:
+    build:
+      context: .
+    image: helm-ai-mcp:0.1.0
+    stdin_open: true        # stdio transport: the client owns stdin/stdout
+    init: true              # PID 1 reaps the Go runtime's threads/children
+    # Least privilege at runtime: no capabilities, no privilege escalation,
+    # immutable root filesystem. Writable space is tmpfs only — /tmp for
+    # scratch and the home directory for Helm's cache/config paths.
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /home/nonroot
+    pids_limit: 256
+    environment:
+      # Safety gates stay off unless you export them on the host first:
+      #   HELM_AI_ALLOW_WRITES=1 docker compose run --rm helm-mcp
+      HELM_AI_ALLOW_WRITES: ${HELM_AI_ALLOW_WRITES:-}
+      HELM_AI_ALLOW_DESTRUCTIVE: ${HELM_AI_ALLOW_DESTRUCTIVE:-}
+    volumes:
+      # Read-only cluster access; swap in a service-account kubeconfig with
+      # RBAC matching the tier you enabled (see README "Security model").
+      - ${KUBECONFIG:-~/.kube/config}:/home/nonroot/.kube/config:ro

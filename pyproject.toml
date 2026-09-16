@@ -1,0 +1,73 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "helm-python-ai"
+version = "0.1.0"
+description = "AI layer for Helm v4: an MCP server and an autonomous agent built on helm-python-sdk"
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.10"
+authors = [{ name = "Shivam Kumar" }]
+keywords = ["helm", "kubernetes", "mcp", "mcp-server", "model-context-protocol", "agent", "ai", "llm", "claude", "devops"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: Apache Software License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: System :: Systems Administration",
+  "Typing :: Typed",
+]
+# The shared tool layer needs only the Helm binding; the two fronts pull
+# their own runtime through extras so an MCP-only install never drags in
+# the Anthropic SDK and vice versa.
+dependencies = ["helm-python-sdk>=0.2.2"]
+
+[project.urls]
+Homepage = "https://github.com/shivamkumar99/helm-python-ai"
+"Python SDK" = "https://github.com/shivamkumar99/helm-python-sdk"
+"Native library" = "https://github.com/shivamkumar99/helm-c-sdk"
+
+[project.optional-dependencies]
+server = ["mcp>=2", "anyio>=4"]
+agent = ["anthropic>=0.116"]
+observability = ["opentelemetry-sdk>=1.27", "opentelemetry-exporter-otlp-proto-http>=1.27"]
+all = ["mcp>=2", "anyio>=4", "anthropic>=0.116"]
+# ruff and mypy are pinned: an unpinned formatter drifts red without any
+# code change when a release adjusts its output.
+dev = ["pytest>=8", "ruff==0.16.2", "mypy==2.3.0", "mcp>=2", "anyio>=4", "anthropic>=0.116", "opentelemetry-sdk>=1.27", "opentelemetry-exporter-otlp-proto-http>=1.27"]
+
+[project.scripts]
+helm-ai-mcp = "helm_ai.mcp_server:main"
+helm-ai-agent = "helm_ai.agent:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/helm_ai"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+  "cluster: needs a reachable Kubernetes cluster (auto-skips without one)",
+]
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "UP", "B", "SIM", "RUF"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+files = ["src/helm_ai"]
+
+[tool.bandit]
+# Tests use bare assert by design (pytest rewrites them; the suite never
+# runs under python -O) and are not shipped.
+exclude_dirs = ["tests", ".venv", "vendor"]
