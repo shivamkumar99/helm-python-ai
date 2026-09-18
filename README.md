@@ -5,6 +5,7 @@
 [![License: Apache-2.0](https://img.shields.io/github/license/shivamkumar99/helm-python-ai)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-3776AB?logo=python&logoColor=white)](pyproject.toml)
 [![MCP](https://img.shields.io/badge/MCP-server%20%2B%20Apps%20UI-informational)](https://modelcontextprotocol.io)
+[![M8ven Score](https://m8ven.ai/badge/mcp/shivamkumar99/helm-python-ai)](https://m8ven.ai/mcp/shivamkumar99/helm-python-ai)
 
 A [Model Context Protocol](https://modelcontextprotocol.io) (MCP) server and an
 autonomous AI agent for [Helm](https://helm.sh), the Kubernetes package
